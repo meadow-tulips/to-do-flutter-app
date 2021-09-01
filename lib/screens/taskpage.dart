@@ -17,15 +17,37 @@ class _TaskPageState extends State<TaskPage> {
   DatabaseHelper databaseHelper = DatabaseHelper();
   int _taskId = 0;
   String _taskTitle = '';
+  String _taskDescription = '';
+
+  late FocusNode _titleFocus;
+  late FocusNode _descriptionFocus;
+  late FocusNode _todoFocus;
+
+  bool _contentVisible = false;
 
   @override
   void initState() {
     if (widget._task != null) {
+      _contentVisible = true;
       var task = widget._task!.getTask();
       _taskId = task['id'];
       _taskTitle = task['title'];
+      _taskDescription = task['description'];
     }
+
+    _titleFocus = FocusNode();
+    _descriptionFocus = FocusNode();
+    _todoFocus = FocusNode();
+
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _titleFocus.dispose();
+    _descriptionFocus.dispose();
+    _todoFocus.dispose();
+    super.dispose();
   }
 
   @override
@@ -51,14 +73,20 @@ class _TaskPageState extends State<TaskPage> {
                       )),
                   Expanded(
                       child: TextField(
-                    onSubmitted: (val) {
+                    focusNode: _titleFocus,
+                    onSubmitted: (val) async {
                       if (val != '') {
                         if (widget._task == null) {
-                          databaseHelper.insertTask(new Task(title: val));
+                          _taskId = await databaseHelper
+                              .insertTask(new Task(title: val));
                         } else {
-                          widget._task!.setTitle(val);
-                          databaseHelper.insertTask(widget._task!);
+                          await databaseHelper.updateTaskTitle(_taskId, val);
                         }
+                        _descriptionFocus.requestFocus();
+                        setState(() {
+                          _contentVisible = true;
+                          _taskTitle = val;
+                        });
                       }
                     },
                     controller: TextEditingController()..text = _taskTitle,
@@ -71,49 +99,76 @@ class _TaskPageState extends State<TaskPage> {
                   ))
                 ],
               ),
-              Padding(
-                  padding: EdgeInsets.only(
-                    bottom: 12,
-                  ),
-                  child: TextField(
-                    decoration: InputDecoration(
-                        hintText: 'Enter description for the task',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 24)),
-                    style: TextStyle(fontWeight: FontWeight.w300, fontSize: 14),
-                  )),
-              Expanded(
-                  child: FutureBuilder<List<TodoModel.Todo>>(
-                initialData: [],
-                future: databaseHelper.getTodo(_taskId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    return ListView.builder(
-                        itemCount: snapshot.data!.length,
-                        itemBuilder: (context, index) {
-                          var _todoInstance = snapshot.data![index].getTodo();
-                          return GestureDetector(
-                            onTap: () {
-                              var isDone = _todoInstance['isDone'];
-                              if (isDone == 0) {
-                                snapshot.data![index].setCompletion(1);
-                              } else {
-                                snapshot.data![index].setCompletion(0);
-                              }
-                              databaseHelper.insertTodo(snapshot.data![index]);
-                              setState(() {});
-                            },
-                            child: Todo(_todoInstance['description'],
-                                _todoInstance['isDone'] == 0 ? false : true),
-                          );
-                        });
-                  } else {
-                    return Text('No Assigned to do\'s');
-                  }
-                },
-              )),
-              Row(
-                children: [
+              Visibility(
+                  visible: _contentVisible,
+                  child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 12,
+                      ),
+                      child: TextField(
+                        focusNode: _descriptionFocus,
+                        onSubmitted: (val) async {
+                          if (val != '') {
+                            if (_taskId != 0) {
+                              await databaseHelper.updateTaskDescription(
+                                  _taskId, val);
+                                  setState(() {
+                                    _taskDescription = val;
+                                  });
+                            }
+                            _todoFocus.requestFocus();
+                          }
+                        },
+                        controller: TextEditingController()
+                          ..text = _taskDescription,
+                        decoration: InputDecoration(
+                            hintText: 'Enter description for the task',
+                            border: InputBorder.none,
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 24)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w300, fontSize: 14),
+                      ))),
+              Visibility(
+                  visible: _contentVisible,
+                  child: Expanded(
+                      child: FutureBuilder<List<TodoModel.Todo>>(
+                    initialData: [],
+                    future: databaseHelper.getTodo(_taskId),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        return ListView.builder(
+                            itemCount: snapshot.data!.length,
+                            itemBuilder: (context, index) {
+                              var _todoInstance =
+                                  snapshot.data![index].getTodo();
+                              return GestureDetector(
+                                onTap: () async {
+                                  var isDone = _todoInstance['isDone'];
+                                  if (isDone == 0) {
+                                    await databaseHelper.updateTodo(
+                                        _todoInstance['id'], 1);
+                                  } else {
+                                    await databaseHelper.updateTodo(
+                                        _todoInstance['id'], 0);
+                                  }
+                                  setState(() {});
+                                },
+                                child: Todo(
+                                    _todoInstance['description'],
+                                    _todoInstance['isDone'] == 0
+                                        ? false
+                                        : true),
+                              );
+                            });
+                      } else {
+                        return Text('No Assigned to do\'s');
+                      }
+                    },
+                  ))),
+              Visibility(
+                visible: _contentVisible,
+                child: Row(children: [
                   Container(
                     width: 16,
                     height: 16,
@@ -124,6 +179,8 @@ class _TaskPageState extends State<TaskPage> {
                   ),
                   Expanded(
                     child: TextField(
+                      controller: TextEditingController()..text = "",
+                      focusNode: _todoFocus,
                       decoration: InputDecoration(
                           hintText: 'Enter to do item ..',
                           border: InputBorder.none),
@@ -133,32 +190,34 @@ class _TaskPageState extends State<TaskPage> {
                               description: val, isDone: 0, taskId: _taskId);
                           databaseHelper.insertTodo(_todoInstance);
                           setState(() {});
+                          _todoFocus.requestFocus();
                         }
                       },
                     ),
                   )
-                ],
+                ]),
               )
             ]),
-            Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => TaskPage(null)));
-                    },
-                    child: Container(
-                        height: 50,
-                        width: 50,
-                        decoration: BoxDecoration(
-                          color: Color(0XFFFE3572),
-                        ),
-                        child: Image(
-                          image: AssetImage('assets/images/delete_icon@1X.png'),
-                        ))))
+            Visibility(
+                visible: _contentVisible,
+                child: Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                        onTap: () {
+                          databaseHelper.deleteTask(_taskId);
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                            height: 50,
+                            width: 50,
+                            decoration: BoxDecoration(
+                              color: Color(0XFFFE3572),
+                            ),
+                            child: Image(
+                              image: AssetImage(
+                                  'assets/images/delete_icon@1X.png'),
+                            ))))),
           ],
         ),
       )),
