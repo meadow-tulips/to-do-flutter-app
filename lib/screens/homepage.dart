@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:todoapp/database/database-helper.dart';
 import 'package:todoapp/screens/taskpage.dart';
 import 'package:todoapp/widgets/taskcardwidget.dart';
+import 'package:todoapp/database/models/task.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({Key? key}) : super(key: key);
@@ -10,6 +13,8 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  DatabaseHelper _dbHelper = DatabaseHelper();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,16 +35,30 @@ class _HomepageState extends State<Homepage> {
                             ),
                           ),
                           Expanded(
-                              child: ListView(
-                            children: [
-                              Taskcard("Get Started !",
-                                  "Hello user. Welcome to our To do Application ! One can add a whole bunch of items in their list of everyday to do's."),
-                              Taskcard(),
-                              Taskcard(),
-                              Taskcard(),
-                              Taskcard()
-                            ],
-                          )),
+                              child: FutureBuilder<List<Task>>(
+                                  initialData: [],
+                                  future: _dbHelper.getAllTasks(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasData) {
+                                      return ListView.builder(
+                                        itemCount: snapshot.data!.length,
+                                        itemBuilder: (context, index) {
+                                          var _taskInstance =
+                                              snapshot.data![index].getTask();
+                                          return GestureDetector(
+                                            onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(builder: (context) => TaskPage(snapshot.data![index])));
+                                            },
+                                            child: Taskcard(
+                                                _taskInstance['title'],
+                                                _taskInstance['description']),
+                                          );
+                                        },
+                                      );
+                                    } else {
+                                      return Center(child: Text('No Lists'));
+                                    }
+                                  })),
                         ]),
                     Positioned(
                       bottom: 0,
@@ -47,9 +66,10 @@ class _HomepageState extends State<Homepage> {
                       child: GestureDetector(
                           onTap: () {
                             Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => TaskPage()));
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) => TaskPage(null)))
+                                .then((value) => setState(() {}));
                           },
                           child: Image(
                             image: AssetImage('assets/images/add_icon.png'),

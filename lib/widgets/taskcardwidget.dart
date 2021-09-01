@@ -25,7 +25,7 @@ class _TaskcardState extends State<Taskcard> {
                 ),
               ),
             Padding(padding: EdgeInsets.only(top: 10),
-              child:  Text(widget.desc ?? "No Description", 
+              child:  Text(widget.desc != null && widget.desc!.isNotEmpty ? widget.desc! : "No Description Provided",
                 style: TextStyle(
                   color: Color(0XFF868290),
                   fontWeight: FontWeight.normal,
